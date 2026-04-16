@@ -46,9 +46,11 @@ public:
 	std::mutex distortionProfileLock;
 	// Cache the distortion profile pointer once per frame
 	std::atomic<const DistortionProfile*> cachedDistortionProfile{nullptr};
-	// UV transformation constants - computed once per frame
+	// UV transformation constants - computed when config changes
 	UVTransformConstants uvConstants{};
 	std::mutex uvConstantsLock;
+	// Track which config values affect UV constants to avoid unnecessary updates
+	int lastUVConfigHash = 0;
 	// time that last frame occurred
 	double lastFrameTime = 0;
 	// last time the distortion was changed
