@@ -33,6 +33,9 @@ private:
 	// this is half the fov of the input image in degrees
 	float halfFovX = 0.0f;
 	float halfFovY = 0.0f;
+	// precomputed inverse tan values for FOV
+	float invTanHalfFovX = 1.0f;
+	float invTanHalfFovY = 1.0f;
 	// recommended render resolution
 	uint32_t recommendedRenderWidth = 0;
 	uint32_t recommendedRenderHeight = 0;

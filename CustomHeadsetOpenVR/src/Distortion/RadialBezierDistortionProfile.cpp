@@ -1,6 +1,7 @@
 #include "RadialBezierDistortionProfile.h"
 
 #include <cmath>
+#include <algorithm>
 
 constexpr float kPi{ 3.1415926535897932384626433832795028841971693993751058209749445f };
 
@@ -40,6 +41,8 @@ static std::vector<DistortionPoint> SmoothPoints(const std::vector<DistortionPoi
 	// smoothAmount is how far out to move the center bezier points from the existing points
 	// larger values will make the curve more "smooth" and less "sharp" at the existing points
 	std::vector<DistortionPoint> outPoints;
+	// Pre-allocate for better performance
+	outPoints.reserve(points.size() * (innerPointCounts + 1));
 	for(size_t i = 0; i < points.size() - 1; i++){
 		// the new points will be inserted between existing points
 		DistortionPoint prevPoint = points[i];
@@ -378,6 +381,10 @@ void RadialBezierDistortionProfile::Initialize(){
 	halfFovX = std::min(halfFovX, maxFovX / 2.0f);
 	halfFovY = std::min(halfFovY, maxFovY / 2.0f);
 	
+	// Precompute inverse tan values for FOV
+	invTanHalfFovX = 1.0f / std::tan(halfFovX * kPi / 180.0f);
+	invTanHalfFovY = 1.0f / std::tan(halfFovY * kPi / 180.0f);
+	
 	// halfFovY = halfFovX;
 	DriverLog("FOV: %fx%f\n", halfFovX * 2, halfFovY * 2);
 	// halfFovX = 20;
@@ -496,16 +503,20 @@ Point2D RadialBezierDistortionProfile::ComputeDistortion(vr::EVREye eEye, ColorC
 	fV += offsetY / 100.0f;
 	
 	// convert to radius and unit vector
-	float radius = std::sqrt(fU * fU + fV * fV);
-	float unitU = fU / radius;
-	float unitV = fV / radius;
-	// fix NaNs
-	if(!std::isfinite(unitU)){
-		unitU = 0;
+	float radiusSq = fU * fU + fV * fV;
+	
+	// Early return for center pixels
+	if(radiusSq < 1e-10f){
+		Point2D distortion;
+		distortion.x = 0.0f;
+		distortion.y = 0.0f;
+		return distortion;
 	}
-	if(!std::isfinite(unitV)){
-		unitV = 0;
-	}
+	
+	float radius = std::sqrt(radiusSq);
+	float invRadius = 1.0f / radius;
+	float unitU = fU * invRadius;
+	float unitV = fV * invRadius;
 	
 	
 	
@@ -526,8 +537,8 @@ Point2D RadialBezierDistortionProfile::ComputeDistortion(vr::EVREye eEye, ColorC
 	Point2D distortion;
 	distortion.x = unitU * radius;
 	distortion.y = unitV * radius;
-	distortion.x /= std::tan(halfFovX * kPi / 180.0f);
-	distortion.y /= std::tan(halfFovY * kPi / 180.0f);
+	distortion.x *= invTanHalfFovX;
+	distortion.y *= invTanHalfFovY;
 	
 	// if(eEye == vr::Eye_Left){
 	// 	distortion.x = distortion.x * 2.0f + 1.0f;

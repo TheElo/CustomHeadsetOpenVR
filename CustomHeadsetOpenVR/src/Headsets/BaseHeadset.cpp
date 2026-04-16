@@ -9,6 +9,24 @@
 
 constexpr float kPi{ 3.1415926535897932384626433832795028841971693993751058209749445f };
 
+// Update UV constants once per frame when config changes
+void BaseHeadsetShim::UpdateUVConstants(){
+	const auto& config = GetConfig();
+	
+	float minResolution = std::min(config.resolutionX, config.resolutionY);
+	float invDistortionZoom = 1.0f / config.distortionZoom;
+	
+	std::lock_guard<std::mutex> lock(uvConstantsLock);
+	
+	uvConstants.uvScaleX = 2.0f * config.resolutionY / minResolution * invDistortionZoom;
+	uvConstants.uvScaleY = 2.0f * config.resolutionX / minResolution * invDistortionZoom;
+	uvConstants.subpixelOffset = config.subpixelShift / 3552.0f;
+	uvConstants.swapUV = (config.displayRotation == 1 || config.displayRotation == 3);
+	uvConstants.invertUV = (config.displayRotation == 2 || config.displayRotation == 3);
+	uvConstants.disableLeftEye = (config.disableEye & 1) != 0;
+	uvConstants.disableRightEye = (config.disableEye & 2) != 0;
+}
+
 void BaseHeadsetShim::PosTrackedDeviceActivate(uint32_t &unObjectId, vr::EVRInitError &returnValue){
 	DriverLog("PosTrackedDeviceActivate");
 	
@@ -130,13 +148,19 @@ bool BaseHeadsetShim::PreDisplayComponentGetProjectionRaw(vr::EVREye &eEye, floa
 
 // run for each vertex of the distortion mesh and outputs the uv coordinates to sample for each color
 bool BaseHeadsetShim::PreDisplayComponentComputeDistortion(vr::EVREye &eEye, float &fU, float &fV, vr::DistortionCoordinates_t &coordinates){
-
-	float minResolution = (float)std::min(GetConfig().resolutionX, GetConfig().resolutionY);
+	// Use precomputed UV constants
+	UVTransformConstants constants;
+	{
+		std::lock_guard<std::mutex> lock(uvConstantsLock);
+		constants = uvConstants;
+	}
+	
 	// change range to -1 to 1 for coverage of the minResolution square
-	fU = (fU - 0.5f) * 2.0f * GetConfig().resolutionY / minResolution;
-	fV = (fV - 0.5f) * 2.0f * GetConfig().resolutionX / minResolution;
-	if(GetConfig().displayRotation == 1 || GetConfig().displayRotation == 3){
-		// swap u and v for 90 and 270 rotation
+	fU = (fU - 0.5f) * constants.uvScaleX;
+	fV = (fV - 0.5f) * constants.uvScaleY;
+	
+	// Apply rotation using precomputed flags
+	if(constants.swapUV){
 		if(eEye == vr::Eye_Left){
 			float tmp = fU;
 			fU = -fV;
@@ -147,13 +171,10 @@ bool BaseHeadsetShim::PreDisplayComponentComputeDistortion(vr::EVREye &eEye, flo
 			fV = -tmp;
 		}
 	}
-	if(GetConfig().displayRotation == 2 || GetConfig().displayRotation == 3){
+	if(constants.invertUV){
 		fU *= -1;
 		fV *= -1;
 	}
-	
-	fU /= (float)GetConfig().distortionZoom;
-	fV /= (float)GetConfig().distortionZoom;
 	
 	float redV = fV;
 	float greenV = fV;
@@ -161,28 +182,31 @@ bool BaseHeadsetShim::PreDisplayComponentComputeDistortion(vr::EVREye &eEye, flo
 	// apply sub pixel offsets for super sampling
 	// the resolution is hardcoded here because the physical pixel sizes remain constant regardless of resolution
 	// TODO: make this configurable
-	float subpixelOffset = (float)(GetConfig().subpixelShift / 3552);
-	// if(testToggle){
 	if(eEye == vr::Eye_Left){
-		redV -= subpixelOffset;
-		greenV += subpixelOffset;
+		redV -= constants.subpixelOffset;
+		greenV += constants.subpixelOffset;
 	}else{
-		redV += subpixelOffset;
-		greenV -= subpixelOffset;
+		redV += constants.subpixelOffset;
+		greenV -= constants.subpixelOffset;
 	}
-	// }
 	
-	std::lock_guard<std::mutex> lock(distortionProfileLock);
+	// Use cached profile pointer (lock-free read)
+	const DistortionProfile* profile = cachedDistortionProfile.load(std::memory_order_acquire);
+	if(profile == nullptr){
+		// Fallback: lock and get profile (shouldn't happen in normal operation)
+		std::lock_guard<std::mutex> lock(distortionProfileLock);
+		profile = distortionProfileConstructor.profile;
+	}
+	
 	// apply distortion profile to each color channel
-	Point2D distortionRed = distortionProfileConstructor.profile->ComputeDistortion(eEye, ColorChannelRed, fU, redV);
-	Point2D distortionGreen = distortionProfileConstructor.profile->ComputeDistortion(eEye, ColorChannelGreen, fU, greenV);
-	Point2D distortionBlue = distortionProfileConstructor.profile->ComputeDistortion(eEye, ColorChannelBlue, fU, fV);
+	Point2D distortionRed = const_cast<DistortionProfile*>(profile)->ComputeDistortion(eEye, ColorChannelRed, fU, redV);
+	Point2D distortionGreen = const_cast<DistortionProfile*>(profile)->ComputeDistortion(eEye, ColorChannelGreen, fU, greenV);
+	Point2D distortionBlue = const_cast<DistortionProfile*>(profile)->ComputeDistortion(eEye, ColorChannelBlue, fU, fV);
 	
-	if(eEye == vr::Eye_Left && GetConfig().disableEye & 1){
+	// Use precomputed disable flags
+	if((eEye == vr::Eye_Left && constants.disableLeftEye) ||
+	   (eEye == vr::Eye_Right && constants.disableRightEye)){
 		// this will completely cull the render mesh
-		distortionRed = distortionGreen = distortionBlue = {-1, -1};
-	}
-	if(eEye == vr::Eye_Right && GetConfig().disableEye & 2){
 		distortionRed = distortionGreen = distortionBlue = {-1, -1};
 	}
 	
@@ -344,6 +368,14 @@ void BaseHeadsetShim::RunFrame(){
 		// don't do anything if not the active device
 		return;
 	}
+	// Cache distortion profile pointer once per frame (instead of 48,000 times)
+	{
+		std::lock_guard<std::mutex> lock(distortionProfileLock);
+		cachedDistortionProfile.store(distortionProfileConstructor.profile, std::memory_order_release);
+	}
+	// Update UV constants once per frame
+	UpdateUVConstants();
+	
 	double now = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count() / 1000000000.0;
 	double frameTime = now - lastFrameTime;
 	if(lastFrameTime == 0){

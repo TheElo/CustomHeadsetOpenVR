@@ -8,6 +8,21 @@
 #include <thread>
 #include <cmath>
 #include <mutex>
+#include <atomic>
+#include <chrono>
+#include <vector>
+#include <algorithm>
+
+// UV transformation constants - computed once per frame
+struct UVTransformConstants {
+    float uvScaleX;           // 2.0f * resolutionY / minResolution / distortionZoom
+    float uvScaleY;           // 2.0f * resolutionX / minResolution / distortionZoom
+    float subpixelOffset;     // subpixelShift / 3552.0f
+    bool swapUV;              // displayRotation == 1 || 3
+    bool invertUV;            // displayRotation == 2 || 3
+    bool disableLeftEye;      // disableEye & 1
+    bool disableRightEye;     // disableEye & 2
+};
 
 // A class that implements almost all functionality to run a headset as a native SteamVR headset
 class BaseHeadsetShim : public ShimDefinition{
@@ -29,6 +44,11 @@ public:
 	
 	DistortionProfileConstructor distortionProfileConstructor;
 	std::mutex distortionProfileLock;
+	// Cache the distortion profile pointer once per frame
+	std::atomic<const DistortionProfile*> cachedDistortionProfile{nullptr};
+	// UV transformation constants - computed once per frame
+	UVTransformConstants uvConstants{};
+	std::mutex uvConstantsLock;
 	// time that last frame occurred
 	double lastFrameTime = 0;
 	// last time the distortion was changed
@@ -69,4 +89,5 @@ public:
 	virtual void RunFrame() override;
 	
 	void UpdateSettings();
+	void UpdateUVConstants();
 };
