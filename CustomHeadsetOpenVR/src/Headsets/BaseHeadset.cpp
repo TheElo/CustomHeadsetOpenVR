@@ -9,22 +9,9 @@
 
 constexpr float kPi{ 3.1415926535897932384626433832795028841971693993751058209749445f };
 
-// Update UV constants only when relevant config values change
+// Update UV constants when distortion config changes
 void BaseHeadsetShim::UpdateUVConstants(){
 	const auto& config = GetConfig();
-	
-	// Create a hash of the config values that affect UV constants
-	// This avoids unnecessary updates when config hasn't changed
-	int currentHash = config.distortionZoom * 1000 + 
-	                  config.subpixelShift * 100 + 
-	                  config.displayRotation * 10 + 
-	                  config.disableEye;
-	
-	// Only update if config has changed
-	if(currentHash == lastUVConfigHash){
-		return;
-	}
-	lastUVConfigHash = currentHash;
 	
 	float minResolution = std::min(config.resolutionX, config.resolutionY);
 	float invDistortionZoom = 1.0f / config.distortionZoom;
@@ -386,8 +373,6 @@ void BaseHeadsetShim::RunFrame(){
 		std::lock_guard<std::mutex> lock(distortionProfileLock);
 		cachedDistortionProfile.store(distortionProfileConstructor.profile, std::memory_order_release);
 	}
-	// Update UV constants only when config changes
-	UpdateUVConstants();
 	
 	double now = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count() / 1000000000.0;
 	double frameTime = now - lastFrameTime;
@@ -584,6 +569,8 @@ void BaseHeadsetShim::UpdateSettings(){
 		// mark to finalize if regenerating within 0.5 seconds of the last
 		needsDistortionFinalization = now - lastDistortionChangeTime < 0.5;
 		lastDistortionChangeTime = now;
+		// Update UV constants when distortion config changes
+		UpdateUVConstants();
 		// it has changed so signal the compositor to regenerate the distortion mesh
 		deviceProvider->SendVendorEvent(0, vr::VREvent_LensDistortionChanged, {}, 0);
 		// also update fov
