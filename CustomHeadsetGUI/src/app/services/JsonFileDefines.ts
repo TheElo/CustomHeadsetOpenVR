@@ -3,6 +3,7 @@ export type DistortionProfileConfig = {
   description: string;
   modifiedTime: number;
   type: string;
+  distortionProfileId: string;
   distortions: number[];
   distortionsRed: number[];
   distortionsBlue: number[];
@@ -44,6 +45,7 @@ export type LinearColor = {
 export type CustomShaderConfig = {
   enable: boolean;
   enableForMeganeX8K: boolean,
+  enableForDreamAir: boolean,
   enableForOther: boolean,
   contrast: number;
   contrastMidpoint: number;
@@ -61,9 +63,11 @@ export type CustomShaderConfig = {
   disableMuraCorrection: boolean;
   disableBlackLevels: boolean;
   srgbColorCorrection: boolean;
+  srgbWhitePointCorrection: boolean;
   srgbColorCorrectionMatrix: number[]; // 3x3 matrix as a flat array of 9 elements
   lensColorCorrection: boolean;
   dither10Bit: boolean;
+  enableFilterForOverlay: boolean;
   samplingFilter: string;
   samplingFilterFXAA2SharpenStrength: number;
   samplingFilterFXAA2SharpenClamp: number;
@@ -92,12 +96,15 @@ export type BaseHeadsetConfig = {
   distortionZoom: number;
   fovZoom: number;
   subpixelShift: number;
+  subpixelOffsets: number[];
   resolutionX: number;
   resolutionY: number;
   maxFovX: number;
   maxFovY: number;
   distortionMeshResolution: number;
   fovBurnInPrevention: boolean;
+  disableFovClamping: boolean;
+  distortionProfileDeviceType: string;
   renderResolutionMultiplierX: number;
   renderResolutionMultiplierY: number;
   superSamplingFilterPercent: number;
@@ -129,6 +136,8 @@ export type AppSetting = {
   updateMode: 'replace' | 'rewrite';
   advanceMode: boolean;
   defaultSettingsTab: 'auto' | 'General' | 'MeganeX8K' | 'DreamAir';
+  showIncompatibleProfiles: boolean;
+  launchPimaxOnStartup: boolean;
 }
 
 export const HeadsetType = {
@@ -162,6 +171,22 @@ export type ResolutionInfo = {
   renderResolution100PercentY: number
 }
 
+export type BuiltInDistortionProfile = {
+  device?: string;
+  distortionProfileId?: string;
+  description?: string;
+  author?: string;
+  creationDate?: number;
+  type?: string;
+  distortions?: number[];
+  distortionsRed?: number[];
+  distortionsBlue?: number[];
+  legacySmoothing?: boolean;
+  smoothAmount?: number;
+  offsetX?: number;
+  offsetY?: number;
+};
+
 export type BuiltInDistortionProfiles = {
-  [profileName: string]: {};
-}
+  [profileName: string]: BuiltInDistortionProfile;
+};

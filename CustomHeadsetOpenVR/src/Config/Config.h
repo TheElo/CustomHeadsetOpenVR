@@ -48,6 +48,7 @@ struct CustomShaderConfig{
 	// if shaders should be replaced in the compositor
 	bool enable = false;
 	bool enableForMeganeX8K = true;
+	bool enableForDreamAir = true;
 	bool enableForOther = false;
 	// contrast with 50 being normal
 	double contrast = 50;
@@ -74,6 +75,8 @@ struct CustomShaderConfig{
 	bool disableBlackLevels = false;
 	// if the colors should be corrected to display the srgb input as srgb on the display
 	bool srgbColorCorrection = false;
+	// if the white point correction should be applied to the srgb color correction
+	bool srgbWhitePointCorrection = false;
 	// a 3x3 matrix to apply to the linear colors
 	// if this is an array of 9 flat elements it will override the headset's default matrix
 	std::vector<double> srgbColorCorrectionMatrix = {};
@@ -81,6 +84,8 @@ struct CustomShaderConfig{
 	bool lensColorCorrection = true;
 	// if a 10 bit input will be dithered down to 8 bit
 	bool dither10Bit = false;
+	// if the overlay filter should be enabled (defaults false to avoid performance hit when no overlay is shown)
+	bool enableFilterForOverlay = false;
 	// filters on the sampling of the texture,  "None", "NearestNeighbor", "FXAA2", "FXAA2CAS", "LumaSharpen", and "CAS"
 	std::string samplingFilter = "None";
 	// FXAA2 filter parameters
@@ -132,8 +137,10 @@ public:
 		double distortionZoom = 1.0;
 		// amount to zoom in the FOV, the fov is divided by this value
 		double fovZoom = 1.0;
-		// amount to shift the subpixels to account for their diffent rows
-		double subpixelShift = 0.33;
+		// multiplier for the subpixel offsets
+		double subpixelShift = 1.0;
+		// subpixel offsets in pixel units for each color channel [offsetXRed, offsetYRed, offsetXGreen, offsetYGreen, offsetXBlue, offsetYBlue]
+		std::vector<double> subpixelOffsets = {0, 0, 0, 0, 0, 0};
 		// width of one eye in pixels
 		int resolutionX = 3840;
 		// height of one eye in pixels
@@ -148,6 +155,10 @@ public:
 		int distortionMeshResolution = 127;
 		// if the fov should be slightly adjusted each session to prevent sharp burn in along the edges
 		bool fovBurnInPrevention = true;
+		// if the distortion profile should not clamp the image to the bounds of the displayand instead render an image at whatever FOV is set
+		bool disableFovClamping = false;
+		// device type used to filter distortion profiles in the GUI
+		std::string distortionProfileDeviceType = "";
 		// multiply 100% render resolution width
 		double renderResolutionMultiplierX = 1.0;
 		// multiply 100% render resolution height
@@ -187,7 +198,7 @@ public:
 		// if the driver should be enabled for every hmd
 		bool forceEnable = false;
 		// if parallel projection should be used for rendering
-		bool parallelProjection = false;
+		bool parallelProjection = true;
 		// Config struct for the hidden area mesh
 		HiddenAreaMeshConfig hiddenArea;
 		// config for dimming the display when stationary
@@ -199,6 +210,7 @@ public:
 		MeganeX8KConfig(){
 			headsetType = HeadsetType::MeganeX8K;
 			distortionProfile = "MeganeX8K Default";
+			distortionProfileDeviceType = "MeganeX8K";
 			edidVendorId = 0xcc4c; // SFL
 			displayRotation = 1;
 		}
@@ -211,9 +223,11 @@ public:
 		DreamAirConfig(){
 			headsetType = HeadsetType::DreamAir;
 			distortionProfile = "Dream Air Default";
+			distortionProfileDeviceType = "DreamAir";
 			maxFovY = 86;
 			edidVendorId = 53826; // PVR
 			displayRotation = 3;
+			subpixelOffsets = {0.33 / 3552.0, 0, 0, 0, -0.33 / 3552.0, 0};
 			eyeRotation = 2;
 		}
 	};

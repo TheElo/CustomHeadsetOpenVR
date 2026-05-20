@@ -66,9 +66,10 @@ export class HeadsetSettingsComponent extends DeviceConfigComponentBase<BaseHead
   config = input.required<HeadsetSettingsConfig>();
   override settingField = input.required<string>();
   override driverName = input.required<string | string[]>();
+  navigateToGeneralTab = output<void>();
   
   resolutionModel?: number;
-  subpixelShiftOptions = [0, 0.33];
+  subpixelShiftOptions = [-1, 0, 1];
   disableEyeOptions: DisableEyeOption[] = [
     { name: $localize`None`, value: 0 },
     { name: $localize`Left`, value: 1 },

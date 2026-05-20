@@ -33,14 +33,17 @@ public:
 	float maxFovY = 175;
 	// amount to divide the fov by
 	float fovZoom = 1;
+	// if true, the distortion profile will not clamp the image to the bounds of the display
+	bool disableFovClamping = false;
 	
 	
 	
 	// called before the other functions are called
 	virtual void Initialize(){};
-	// fU and fV are normalized to be within [-1, 1] within the smallest box that fit on the screen
+	// fU and fV are normalized to be within [-1, 1] within the smallest square that fit on the screen
 	// this means they can be largest than 1 in the larger dimension of the screen
-	// that is not how this function is normally called in the openvr apis 
+	// that is not how this function is normally called in the openvr apis
+	// the putput is in [-1, 1] rendered image UVs
 	virtual Point2D ComputeDistortion(vr::EVREye eEye, ColorChannel colorChannel, float fU, float fV) = 0;
 	// returns the raw projection details
 	// the values are tangents of the half-angle from center axis

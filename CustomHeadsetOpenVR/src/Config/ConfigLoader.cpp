@@ -56,6 +56,9 @@ void parseBaseHeadsetConfig(json headsetData, Config::BaseHeadsetConfig& headset
 	if(headsetData["subpixelShift"].is_number()){
 		headsetConfig.subpixelShift = headsetData["subpixelShift"].get<double>();
 	}
+	if(headsetData["subpixelOffsets"].is_array()){
+		headsetConfig.subpixelOffsets = headsetData["subpixelOffsets"].get<std::vector<double>>();
+	}
 	if(headsetData["resolutionX"].is_number()){
 		headsetConfig.resolutionX = headsetData["resolutionX"].get<int>();
 	}
@@ -76,6 +79,12 @@ void parseBaseHeadsetConfig(json headsetData, Config::BaseHeadsetConfig& headset
 	}
 	if(headsetData["fovBurnInPrevention"].is_boolean()){
 		headsetConfig.fovBurnInPrevention = headsetData["fovBurnInPrevention"].get<bool>();
+	}
+	if(headsetData["disableFovClamping"].is_boolean()){
+		headsetConfig.disableFovClamping = headsetData["disableFovClamping"].get<bool>();
+	}
+	if(headsetData["distortionProfileDeviceType"].is_string()){
+		headsetConfig.distortionProfileDeviceType = headsetData["distortionProfileDeviceType"].get<std::string>();
 	}
 	if(headsetData["renderResolutionMultiplierX"].is_number()){
 		headsetConfig.renderResolutionMultiplierX = headsetData["renderResolutionMultiplierX"].get<double>();
@@ -193,6 +202,9 @@ void ConfigLoader::ParseConfig(){
 			if(customShaderData["enableForMeganeX8K"].is_boolean()){
 				newConfig.customShader.enableForMeganeX8K = customShaderData["enableForMeganeX8K"].get<bool>();
 			}
+			if(customShaderData["enableForDreamAir"].is_boolean()){
+				newConfig.customShader.enableForDreamAir = customShaderData["enableForDreamAir"].get<bool>();
+			}
 			if(customShaderData["enableForOther"].is_boolean()){
 				newConfig.customShader.enableForOther = customShaderData["enableForOther"].get<bool>();
 			}
@@ -241,6 +253,9 @@ void ConfigLoader::ParseConfig(){
 			if(customShaderData["srgbColorCorrection"].is_boolean()){
 				newConfig.customShader.srgbColorCorrection = customShaderData["srgbColorCorrection"].get<bool>();
 			}
+			if(customShaderData["srgbWhitePointCorrection"].is_boolean()){
+				newConfig.customShader.srgbWhitePointCorrection = customShaderData["srgbWhitePointCorrection"].get<bool>();
+			}
 			if(customShaderData["srgbColorCorrectionMatrix"].is_array()){
 				newConfig.customShader.srgbColorCorrectionMatrix = customShaderData["srgbColorCorrectionMatrix"].get<std::vector<double>>();
 			}
@@ -249,6 +264,9 @@ void ConfigLoader::ParseConfig(){
 			}
 			if(customShaderData["dither10Bit"].is_boolean()){
 				newConfig.customShader.dither10Bit = customShaderData["dither10Bit"].get<bool>();
+			}
+			if(customShaderData["enableFilterForOverlay"].is_boolean()){
+				newConfig.customShader.enableFilterForOverlay = customShaderData["enableFilterForOverlay"].get<bool>();
 			}
 			if(customShaderData["samplingFilter"].is_string()){
 				newConfig.customShader.samplingFilter = customShaderData["samplingFilter"].get<std::string>();
@@ -377,6 +395,7 @@ ordered_json baseHeadsetInfo(const Config::BaseHeadsetConfig& headsetConfig){
 		{"distortionZoom", headsetConfig.distortionZoom},
 		{"fovZoom", headsetConfig.fovZoom},
 		{"subpixelShift", headsetConfig.subpixelShift},
+		{"subpixelOffsets", headsetConfig.subpixelOffsets},
 		{"resolutionX", headsetConfig.resolutionX},
 		{"resolutionY", headsetConfig.resolutionY},
 		{"displayRotation", headsetConfig.displayRotation},
@@ -384,6 +403,8 @@ ordered_json baseHeadsetInfo(const Config::BaseHeadsetConfig& headsetConfig){
 		{"maxFovY", headsetConfig.maxFovY},
 		{"distortionMeshResolution", headsetConfig.distortionMeshResolution},
 		{"fovBurnInPrevention", headsetConfig.fovBurnInPrevention},
+		{"disableFovClamping", headsetConfig.disableFovClamping},
+		{"distortionProfileDeviceType", headsetConfig.distortionProfileDeviceType},
 		{"renderResolutionMultiplierX", headsetConfig.renderResolutionMultiplierX},
 		{"renderResolutionMultiplierY", headsetConfig.renderResolutionMultiplierY},
 		{"superSamplingFilterPercent", headsetConfig.superSamplingFilterPercent},
@@ -445,6 +466,7 @@ void ConfigLoader::WriteInfo(){
 			{"customShader", {
 				{"enable", defaultSettings.customShader.enable},
 				{"enableForMeganeX8K", defaultSettings.customShader.enableForMeganeX8K},
+				{"enableForDreamAir", defaultSettings.customShader.enableForDreamAir},
 				{"enableForOther", defaultSettings.customShader.enableForOther},
 				{"contrast", defaultSettings.customShader.contrast},
 				{"contrastMidpoint", defaultSettings.customShader.contrastMidpoint},
@@ -461,9 +483,11 @@ void ConfigLoader::WriteInfo(){
 				{"disableMuraCorrection", defaultSettings.customShader.disableMuraCorrection},
 				{"disableBlackLevels", defaultSettings.customShader.disableBlackLevels},
 				{"srgbColorCorrection", defaultSettings.customShader.srgbColorCorrection},
+				{"srgbWhitePointCorrection", defaultSettings.customShader.srgbWhitePointCorrection},
 				{"srgbColorCorrectionMatrix", defaultSettings.customShader.srgbColorCorrectionMatrix},
 				{"lensColorCorrection", defaultSettings.customShader.lensColorCorrection},
 				{"dither10Bit", defaultSettings.customShader.dither10Bit},
+				{"enableFilterForOverlay", defaultSettings.customShader.enableFilterForOverlay},
 				{"samplingFilter", defaultSettings.customShader.samplingFilter},
 				{"samplingFilterFXAA2SharpenStrength", defaultSettings.customShader.samplingFilterFXAA2SharpenStrength},
 				{"samplingFilterFXAA2SharpenClamp", defaultSettings.customShader.samplingFilterFXAA2SharpenClamp},
@@ -519,7 +543,10 @@ void ConfigLoader::WriteInfo(){
 			{"distortions", profile.distortions},
 			{"distortionsRed", profile.distortionsRed},
 			{"distortionsBlue", profile.distortionsBlue},
+			{"legacySmoothing", profile.legacySmoothing},
 			{"smoothAmount", profile.smoothAmount},
+			{"offsetX", profile.offsetX},
+			{"offsetY", profile.offsetY},
 		};
 		distortionProfilesJson[profile.name] = profileJson;
 	}
@@ -642,7 +669,7 @@ void ConfigLoader::WatcherThreadDistortions(){
 		pNotify = (FILE_NOTIFY_INFORMATION*)buffer;
 		do{
 			std::wstring fileName(pNotify->FileName, pNotify->FileNameLength / sizeof(wchar_t));
-			if(fileName.find(L".json") != std::wstring::npos && (pNotify->Action == FILE_ACTION_MODIFIED || pNotify->Action == FILE_ACTION_ADDED || pNotify->Action == FILE_ACTION_RENAMED_NEW_NAME)){
+			if(fileName.size() >= 5 && fileName.substr(fileName.size() - 5) == L".json" && (pNotify->Action == FILE_ACTION_MODIFIED || pNotify->Action == FILE_ACTION_ADDED || pNotify->Action == FILE_ACTION_RENAMED_NEW_NAME)){
 				DriverLog("Distortion profile changed, reloading...");
 				std::this_thread::sleep_for(std::chrono::milliseconds(10));
 				while(driverConfig.hasBeenUpdated){
@@ -745,7 +772,7 @@ void ConfigLoader::WatcherThreadDistortions(){
 			if(event->mask & IN_MODIFY || event->mask & IN_CREATE){
 				if(event->len){
 					std::string fileName = event->name;
-					if(fileName.find(".json") != std::string::npos){
+					if(fileName.size() >= 5 && fileName.substr(fileName.size() - 5) == ".json"){
 						DriverLog("Distortion profile changed, reloading...");
 							std::this_thread::sleep_for(std::chrono::milliseconds(10));
 							while(driverConfig.hasBeenUpdated){

@@ -482,11 +482,17 @@ float4 sampleSceneTexture(in Texture2D<float4> tex, in float2 uv, in float2 dx, 
 	return inputColorProcessor(color);
 }
 
+float4 sampleSceneTextureBasic(in Texture2D<float4> tex, in float2 uv, in float2 dx, in float2 dy){
+	float4 color = tex.Sample(g_sScene, uv);
+	return inputColorProcessor(color);
+}
+
 OutputStruct main(in InputStruct IN)
 {
 	OutputStruct OUT = (OutputStruct)0;
 	
 	
+	uint2 outputPixel = uint2(IN.Position.xy);
 	
 	#ifndef NO_DISTORTION
 	
@@ -494,7 +500,6 @@ OutputStruct main(in InputStruct IN)
 	float2 uvDy = ddy(IN.uv2.xy);
 	float2 uvDxOverlay = ddx(IN.uv2.zw);
 	float2 uvDyOverlay = ddy(IN.uv2.zw);
-	uint2 outputPixel = uint2(IN.Position.xy);
 	int2 outputPixelOdd2D = uint2(frac(outputPixel/2.0f)*2.0f) % 2;
 	
 	#ifdef SUBPIXEL_SHIFT_MEGANEX8K
@@ -509,6 +514,37 @@ OutputStruct main(in InputStruct IN)
 	// }
 	// I am not sure why the red subpixel is flipped vs the shadertoy, but it seems correct in testing
 	if(outputPixelOdd){
+		IN.uv1.xy += -offsetAmountY;
+		IN.uv2.xy +=  offsetAmountY;
+		IN.uv3.xy += -offsetAmountY;
+		
+		IN.uv1.zw += -offsetAmountYOverlay;
+		IN.uv2.zw +=  offsetAmountYOverlay;
+		IN.uv3.zw += -offsetAmountYOverlay;
+	}else{
+		IN.uv1.xy +=  offsetAmountY;
+		IN.uv2.xy += -offsetAmountY;
+		IN.uv3.xy +=  offsetAmountY;
+		
+		IN.uv1.zw +=  offsetAmountYOverlay;
+		IN.uv2.zw += -offsetAmountYOverlay;
+		IN.uv3.zw +=  offsetAmountYOverlay;
+	}
+	#endif
+	
+	#ifdef SUBPIXEL_SHIFT_DREAMAIR
+	// do subpixel offsets
+	// https://www.shadertoy.com/view/Wcd3D7
+	// only the y direction is done because the x direction is already done by global offsets in the UVs
+	bool outputPixelOdd = outputPixelOdd2D.x == 0;
+	float2 offsetAmountY = uvDy * 0.25f;
+	float2 offsetAmountYOverlay = uvDyOverlay * 0.25f;
+	// if(frac(g_flTime)>0.5){
+		// offsetAmountY *= 100;
+		// offsetAmountY *= 0;
+		// offsetAmountY *= -1;
+	// }
+	if(!outputPixelOdd){
 		IN.uv1.xy += -offsetAmountY;
 		IN.uv2.xy +=  offsetAmountY;
 		IN.uv3.xy += -offsetAmountY;
@@ -619,9 +655,15 @@ OutputStruct main(in InputStruct IN)
 	
 	#ifndef NO_LAYER
  	// sample and combine existing overlay
+	#ifdef NO_OVERLAY_FILTER
+	float2 layerRA = sampleSceneTextureBasic(g_tLayer, IN.uv1.zw, uvDxOverlay, uvDyOverlay).ra;
+ 	float2 layerGA = sampleSceneTextureBasic(g_tLayer, IN.uv2.zw, uvDxOverlay, uvDyOverlay).ga;
+ 	float2 layerBA = sampleSceneTextureBasic(g_tLayer, IN.uv3.zw, uvDxOverlay, uvDyOverlay).ba;
+	#else
  	float2 layerRA = sampleSceneTexture(g_tLayer, IN.uv1.zw, uvDxOverlay, uvDyOverlay).ra;
  	float2 layerGA = sampleSceneTexture(g_tLayer, IN.uv2.zw, uvDxOverlay, uvDyOverlay).ga;
  	float2 layerBA = sampleSceneTexture(g_tLayer, IN.uv3.zw, uvDxOverlay, uvDyOverlay).ba;
+	#endif
 	float3 layerColors = float3(layerRA.x, layerGA.x, layerBA.x);
 	float3 layerAlphas = float3(layerRA.y, layerGA.y, layerBA.y);
 	// layerAlphas = layerRA.x > 0;
@@ -683,7 +725,6 @@ OutputStruct main(in InputStruct IN)
 	#endif
 	
 	#ifdef LENS_COLOR_CORRECTION
-	#ifdef MEGANEX8K
 	// correct for warmer colored center of the lens on the MeganeX
 	#ifdef OUTPUT_RESOLUTION_X
 	// distance from 0 to silghtly above 1 from the display not being square
@@ -694,6 +735,7 @@ OutputStruct main(in InputStruct IN)
 	// fallback to this if the resolution is not defined, but this scales with FOV
 	float distanceFromCenter = length(IN.uv2.zw - 0.5) * 2;
 	#endif
+	#ifdef MEGANEX8K
 	// try 1
 	// col.b *= 1 - min(pow(distanceFromCenter, 2), 0.15) * 1.5;
 	// col.rg *= 0.9;
@@ -710,6 +752,12 @@ OutputStruct main(in InputStruct IN)
 	// float fadeOutPoint = 0.9;
 	// float fadeCenterPoint = (fadeInPoint + fadeOutPoint) / 2;
 	// col.rgb *= 1 - lerp(pow(smoothstep(fadeInPoint, fadeOutPoint, distanceFromCenter), 3), pow(smoothstep(fadeInPoint, fadeOutPoint, distanceFromCenter), 0.2), smoothstep((fadeInPoint - fadeCenterPoint) * 0.7 + fadeCenterPoint, (fadeOutPoint - fadeCenterPoint) * 0.7 + fadeCenterPoint, distanceFromCenter));
+	#endif
+	#ifdef DREAMAIR
+	float scaledDistanceFromCenter = max(0, distanceFromCenter * 0.5 - 0.15);
+	float sideAmount = min(scaledDistanceFromCenter * scaledDistanceFromCenter, 0.08);
+	col.r *= 1 - sideAmount * 2.0;
+	col.g *= 1 - sideAmount * 0.3;
 	#endif
 	#endif
 	
